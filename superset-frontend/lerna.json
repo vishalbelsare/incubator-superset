@@ -1,13 +1,26 @@
 {
-  "lerna": "3.2.1",
   "npmClient": "npm",
-  "packages": ["packages/*", "plugins/*", "temporary_superset_ui/*"],
-  "useWorkspaces": true,
-  "version": "0.0.0",
+  "packages": [
+    "packages/*",
+    "plugins/*",
+    "src/setup/*"
+  ],
+  "version": "0.20.4",
   "ignoreChanges": [
     "**/*.md",
     "**/*.spec.tsx?",
     "**/*.spec.jsx?",
     "**/__mocks__/**"
-  ]
+  ],
+  "command": {
+    "publish": {
+      "message": "chore(superset-ui): publish %s",
+      "graphType": "all"
+    },
+    "version": {
+      "message": "chore(superset-ui): publish %s",
+      "exact": true
+    }
+  },
+  "$schema": "node_modules/lerna/schemas/lerna-schema.json"
 }

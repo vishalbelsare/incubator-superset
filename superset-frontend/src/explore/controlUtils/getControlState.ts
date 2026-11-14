@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import {
   DatasourceType,
   ensureIsArray,
@@ -85,7 +85,7 @@ function handleMissingChoice<T = ControlType>(control: ControlState<T>) {
 
 export function applyMapStateToPropsToControl<T = ControlType>(
   controlState: ControlState<T>,
-  controlPanelState: Partial<ControlPanelState>,
+  controlPanelState: Partial<ControlPanelState> | null,
 ) {
   const { mapStateToProps } = controlState;
   let state = { ...controlState };
@@ -98,6 +98,21 @@ export function applyMapStateToPropsToControl<T = ControlType>(
     // `mapStateToProps` may also provide a value
     value = value || state.value;
   }
+
+  // InitialValue is used for setting value for the control,
+  // this value is not recalculated. The default value will override it.
+  if (typeof state.initialValue === 'function') {
+    state.initialValue = state.initialValue(state, controlPanelState);
+    // if default is still a function, discard
+    if (typeof state.initialValue === 'function') {
+      delete state.initialValue;
+    }
+  }
+  if (state.initialValue) {
+    value = state.initialValue;
+    delete state.initialValue;
+  }
+
   // If default is a function, evaluate it
   if (typeof state.default === 'function') {
     state.default = state.default(state, controlPanelState);
@@ -107,7 +122,8 @@ export function applyMapStateToPropsToControl<T = ControlType>(
     }
   }
   // If no current value, set it as default
-  if (state.default && value === undefined) {
+  // Use loose equality to catch both null and undefined
+  if (state.default != null && value == null) {
     value = state.default;
   }
   // If a choice control went from multi=false to true, wrap value in array
@@ -120,7 +136,7 @@ export function applyMapStateToPropsToControl<T = ControlType>(
 
 export function getControlStateFromControlConfig<T = ControlType>(
   controlConfig: ControlConfig<T> | null,
-  controlPanelState: Partial<ControlPanelState>,
+  controlPanelState: Partial<ControlPanelState> | null,
   value?: JsonValue,
 ) {
   // skip invalid config values
@@ -130,10 +146,7 @@ export function getControlStateFromControlConfig<T = ControlType>(
   const controlState = { ...controlConfig, value } as ControlState<T>;
   // only apply mapStateToProps when control states have been initialized
   // or when explicitly didn't provide control panel state (mostly for testing)
-  if (
-    (controlPanelState && controlPanelState.controls) ||
-    controlPanelState === null
-  ) {
+  if (controlPanelState?.controls || controlPanelState === null) {
     return applyMapStateToPropsToControl(controlState, controlPanelState);
   }
   return controlState;
@@ -155,23 +168,32 @@ export function getControlState(
 export function getAllControlsState(
   vizType: string,
   datasourceType: DatasourceType,
-  state: ControlPanelState,
+  state: ControlPanelState | null,
   formData: QueryFormData,
 ) {
-  const controlsState = {};
-  getSectionsToRender(vizType, datasourceType).forEach(section =>
+  const controlsState: Record<string, ControlState<any> | null> = {};
+  getSectionsToRender(vizType, datasourceType).forEach(section => {
+    if (!section || !section.controlSetRows) return;
     section.controlSetRows.forEach(fieldsetRow =>
       fieldsetRow.forEach((field: CustomControlItem) => {
-        if (field && field.config && field.name) {
+        if (field?.config && field.name) {
           const { config, name } = field;
           controlsState[name] = getControlStateFromControlConfig(
             config,
             state,
             formData[name],
           );
+        } else if (React.isValidElement(field)) {
+          const props = field.props as { name: string; [key: string]: any };
+          const { name, ...configProps } = props;
+          controlsState[name] = getControlStateFromControlConfig(
+            configProps as ControlConfig<any>,
+            state,
+            formData[name],
+          );
         }
       }),
-    ),
-  );
+    );
+  });
   return controlsState;
 }
